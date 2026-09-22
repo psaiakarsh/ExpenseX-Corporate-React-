@@ -1,0 +1,4 @@
+node_modules/
+dist/
+# Version 1 reference archive — read-only, not part of this project.
+*.zip
