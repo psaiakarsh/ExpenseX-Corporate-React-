@@ -248,6 +248,34 @@ describe('deleting and submitting drafts', () => {
     assert.deepEqual(loadReceipts(), {});
   });
 
+  // A rejected claim IS editable, so the draft check in can('expense.deleteDraft') is the only thing
+  // stopping it being deleted — and its rejection is financial history that has to survive.
+  test('a rejected claim can be edited but never deleted', async () => {
+    const { mA, e1, pA } = await makeCompany();
+    const { expense } = ok(saveEmployeeExpense(e1, expenseInput({ projectId: pA.id }), { submit: true }));
+    ok(rejectExpense(mA, expense.id, 'Attach the itemised bill.'));
+    const db = loadDb();
+    const stored = findExpense(db, expense.id);
+    assert.equal(can(e1, 'expense.edit', stored, db), true);
+    assert.equal(can(e1, 'expense.deleteDraft', stored, db), false);
+    assert.equal(deleteDraft(e1, expense.id).ok, false);
+    assert.equal(loadDb().expenses.length, 1, 'the rejected claim and its history survive');
+  });
+
+  // Defence in depth: expense.edit also requires that the employee CREATED the claim. A manager-created
+  // claim is approved on creation, so this only bites if a record ever reaches an editable state.
+  test('an expense the employee did not create stays locked even in an editable state', async () => {
+    const { mA, e1, pA } = await makeCompany();
+    const { expense } = ok(createManagerExpense(mA, expenseInput({ projectId: pA.id }), { employeeId: e1.id }));
+    const db = loadDb();
+    findExpense(db, expense.id).status = 'draft';
+    commit(db, ['expenses']);
+    const fresh = loadDb();
+    assert.equal(can(e1, 'expense.edit', findExpense(fresh, expense.id), fresh), false);
+    assert.match(saveEmployeeExpense(e1, expenseInput({ projectId: pA.id }), { expenseId: expense.id }).error, /can no longer be edited/);
+    assert.equal(deleteDraft(e1, expense.id).ok, false);
+  });
+
   test('submitDraft re-validates the stored draft (kept from V1 for list-level submission)', async () => {
     const { mA, e1, pA } = await makeCompany();
     const draft = ok(saveEmployeeExpense(e1, expenseInput({ projectId: pA.id }))).expense;

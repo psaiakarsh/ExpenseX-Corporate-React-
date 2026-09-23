@@ -60,6 +60,22 @@ describe('marking reimbursed', () => {
     assert.match(markReimbursed(mA, recordId).error, /does not match/);
   });
 
+  // Defence in depth: markPaid checks the employee's CURRENT manager as well as visibility of the
+  // expense, so a record that points at another team's employee cannot be paid by the wrong manager.
+  test('refuses a record whose employee belongs to another manager', async () => {
+    const { mA, e3, recordId } = await approvedClaim();
+    const db = loadDb();
+    db.reimbursements.find((r) => r.id === recordId).employeeId = e3.id; // e3 is Manager B's
+    commit(db, ['reimbursements']);
+    const fresh = loadDb();
+    const record = fresh.reimbursements.find((r) => r.id === recordId);
+    assert.equal(canViewExpense(mA, findExpense(fresh, record.expenseId), fresh), true, 'mA can still see the expense');
+    assert.notEqual(reimbursementManagerId(fresh, record), mA.id);
+    assert.equal(can(mA, 'reimbursement.markPaid', record, fresh), false);
+    assert.equal(markReimbursed(mA, recordId).ok, false);
+    assert.equal(loadDb().reimbursements.find((r) => r.id === recordId).status, 'pending');
+  });
+
   test('a manager pays their own self-approved claim without notifying themselves', async () => {
     const { mA, pA } = await makeCompany();
     const { expense } = ok(createManagerExpense(mA, expenseInput({ projectId: pA.id }), { employeeId: mA.id }));
