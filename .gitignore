@@ -1,4 +1,18 @@
 node_modules/
 dist/
+
+# Private development configuration
+.claude/
+CLAUDE.md
+AGENTS.md
+PROJECT_PROGRESS.md
+
+# Environment variables
+.env
+.env.*
+!.env.example
+
+# Temporary files and archives
+project-inventory.csv
 # Version 1 reference archive — read-only, not part of this project.
 *.zip
